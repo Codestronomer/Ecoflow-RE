@@ -1,0 +1,27 @@
+# binaries / proprietary artifacts (not redistributed)
+*.apk
+*.aab
+*.so
+*.dex
+*.jar
+*.idsig
+*.xapk
+*.obb
+
+# decompiler / analysis trees
+jadx-src/
+jadx-targeted/
+jadx-pr708/
+extracted/
+ghidra/
+ghidra_*/
+work/
+
+# capture tooling artifacts
+*.btsnoop
+btsnoop-*.log
+full-dis.txt
+att-stream*.txt
+
+# OS noise
+.DS_Store
