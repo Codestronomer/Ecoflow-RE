@@ -37,6 +37,5 @@ kill $LOGCAT_PID 2>/dev/null || true
 
 echo "[5/5] pulling capture"
 $ADB shell svc power stayon false
-$ADB pull "/sdcard/Download" >/dev/null 2>&1 || true
 wc -l "ble/$OUT"
 echo "done -> ble/$OUT"
