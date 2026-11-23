@@ -1,4 +1,4 @@
-# EcoFlow E980 (R33 / MR330 / PR708) — BLE Protocol Reverse Engineering
+# EcoFlow E980 (R33 / MR330 / PR708) BLE Protocol Reverse Engineering
 
 Full-stack reverse engineering of the EcoFlow E980 portable power station's
 Bluetooth Low Energy protocol, **without the official app**, ending in:
@@ -8,7 +8,7 @@ Bluetooth Low Energy protocol, **without the official app**, ending in:
 - a **complete, verified field map** for every telemetry frame (SOC, pack
   voltage, current, input/output watts, temperatures, cycle counts, sub-pack
   serials…);
-- **verified device control** — AC output on/off and RTC set, byte-identical to
+- **verified device control**: AC output on/off and RTC set, byte-identical to
   the frames the official app sends.
 
 | | |
