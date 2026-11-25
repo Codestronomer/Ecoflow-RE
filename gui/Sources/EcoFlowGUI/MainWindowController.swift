@@ -4,7 +4,7 @@ import AppKit
 import EcoFlowKit
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     let model = AppModel()
     var windowController: MainWindowController?
     var statusBar: StatusBarController?
@@ -19,11 +19,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.install()
         statusBar = status
 
+        MainMenu.install(to: self)
+
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false   // keep running for the menu bar
+    }
+
+    // MARK: menu actions (target = self)
+
+    @objc func connectTapped() { model.connect() }
+    @objc func disconnectTapped() { model.disconnect() }
+    @objc func setClockTapped() { model.setRTC() }
+
+    @objc func copyPacketLogTapped() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(model.packetLines.joined(separator: "\n"), forType: .string)
+    }
+
+    @objc func showDashboardTab() { windowController?.selectTab(0) }
+    @objc func showLogTab() { windowController?.selectTab(1) }
+    @objc func showSettingsTab() {
+        windowController?.selectTab(2)
+        windowController?.showWindow(nil)
+    }
+
+    @objc func showShortcutsTapped() {
+        let alert = NSAlert()
+        alert.messageText = "Keyboard Shortcuts"
+        alert.informativeText = """
+        Connect  ⇧⌘C    Disconnect  ⇧⌘D
+        Set Device Clock…  ⇧⌘T
+        Copy Packet Log  ⇧⌘L
+        Dashboard / Log / Settings  ⌘1 / ⌘2 / ⌘3
+        Settings…  ⌘,    Close Window  ⌘W
+        Minimize  ⌘M    Hide  ⌘H    Quit  ⌘Q
+        """
+        alert.runModal()
+    }
+
+    // Disabled items communicate context (HIG).
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(connectTapped):
+            return model.phase != .live
+        case #selector(disconnectTapped):
+            return model.phase == .live
+        case #selector(setClockTapped):
+            return model.phase == .live
+        case #selector(copyPacketLogTapped):
+            return !model.packetLines.isEmpty
+        default:
+            return true
+        }
     }
 }
 
@@ -43,6 +93,7 @@ struct EcoFlowGUIMain {
 final class MainWindowController: NSWindowController {
     private let model: AppModel
     private var dashboardVC: DashboardViewController!
+    private var detailVC: DetailHostViewController!
     private var refreshObserver: NSObjectProtocol?
 
     init(model: AppModel) {
@@ -72,6 +123,7 @@ final class MainWindowController: NSWindowController {
         sidebarItem.canCollapse = false
         let detailVC = DetailHostViewController(
             dashboard: dashboardVC.view, log: logVC.view, settings: settingsVC.view)
+        self.detailVC = detailVC
         let detailItem = NSSplitViewItem(viewController: detailVC)
 
         let split = NSSplitViewController()
@@ -80,6 +132,10 @@ final class MainWindowController: NSWindowController {
         window.contentViewController = split
         window.setContentSize(NSSize(width: 980, height: 680))
         window.center()
+        window.setFrameAutosaveName("MainWindow")   // session state: restore position/size
+        // session state: restore the active tab
+        let savedTab = UserDefaults.standard.integer(forKey: "ui.selectedTab")
+        detailVC.selectTab(min(max(savedTab, 0), 2))
         refreshObserver = NotificationCenter.default.addObserver(
             forName: .appModelChanged, object: model, queue: .main
         ) { [weak self] _ in
@@ -88,6 +144,11 @@ final class MainWindowController: NSWindowController {
     }
 
     required init?(coder: NSCoder) { fatalError("not supported") }
+
+    func selectTab(_ index: Int) {
+        detailVC?.selectTab(index)
+        UserDefaults.standard.set(index, forKey: "ui.selectedTab")
+    }
 
     deinit { if let o = refreshObserver { NotificationCenter.default.removeObserver(o) } }
 }
@@ -111,8 +172,12 @@ final class DetailHostViewController: NSViewController {
     required init?(coder: NSCoder) { fatalError("not supported") }
 
     @objc private func switchTab() {
-        let idx = segmented.selectedSegment
-        for (i, tab) in tabViews.enumerated() { tab.view.isHidden = (i != idx) }
+        selectTab(segmented.selectedSegment)
+    }
+
+    func selectTab(_ index: Int) {
+        segmented.selectedSegment = index
+        for (i, tab) in tabViews.enumerated() { tab.view.isHidden = (i != index) }
     }
 
     override func loadView() {

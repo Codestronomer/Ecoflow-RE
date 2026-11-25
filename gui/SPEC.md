@@ -5,7 +5,7 @@ Companion document: [PLAN.md](PLAN.md)
 
 ## 1. Overview
 
-A native macOS SwiftUI application that manages the existing, protocol-complete
+A native macOS AppKit application that manages the existing, protocol-complete
 BLE client for the EcoFlow E980 (R33/MR330). It replaces the terminal-based
 `ble/ecoflow-session` workflow with a proper app: device discovery, one-click
 connection, live telemetry dashboard, verified controls, session logs, and
@@ -38,7 +38,7 @@ re-invention.
 - Development machine: macOS 26.7.3, Swift 6.4, **Command Line Tools only**
   (no `xcodebuild`). Therefore:
   - Project = SwiftPM package with two targets: library `EcoFlowKit` and
-    executable `EcoFlowGUI` (SwiftUI `@main`).
+    executable `EcoFlowGUI` (AppKit, programmatic UI — see the note below).
   - The `.app` bundle is assembled by a script: binary + `Info.plist` +
     `PkgInfo` + `Contents/Resources`, then `codesign --force --deep -s -`
     (ad-hoc) with a stable bundle id.
@@ -355,3 +355,48 @@ RTC = `21→03, 03/40, <8-byte datetime>`; heartbeat `21→02, 20/59` every 20 s
 | macOS 26 SwiftUI API drift | pin deployment target macOS 14; avoid bleeding-edge APIs |
 | Auth state quirks (`05 04` → setAuth → checkAuth) | reuse the CLI's verified state machine; regression tests with recorded frames |
 | Sleep/wake, BT toggles | state machine handles `centralManagerDidUpdateState`; full re-auth on resume |
+
+
+## Toolchain note (AppKit instead of SwiftUI)
+
+The dev machine has **Command Line Tools only** (no Xcode). SwiftUI property
+wrappers (`@State`, `@Observable` in views) require the `SwiftUIMacros` plugin
+that ships **only with full Xcode** — verified with a minimal probe build
+(`@State` fails to expand: "plugin for module 'SwiftUIMacros' not found").
+`ObservationMacros` (for the model) and `SwiftMacros` ARE available, so the kit
+model keeps `@Observable`, and the UI layer is **AppKit** (NSWindow,
+NSSplitViewController, NSVisualEffectView glass materials, NSStatusItem menu
+bar). The design language is unchanged. If Xcode is installed later, the UI can
+be ported to SwiftUI per the original spec.
+
+## Menu bar & keyboard shortcut map (desktop-ui-design skill)
+
+Standard macOS menu structure per Apple HIG: **[App], File, Edit, View,
+Window, Help**. Disabled items communicate context (Connect disabled while
+live, Disconnect/Set Clock/Copy Packet Log disabled when unavailable).
+
+| Command | Shortcut | Menu |
+|---|---|---|
+| Connect | ⇧⌘C | File |
+| Disconnect | ⇧⌘D | File |
+| Set Device Clock… | ⇧⌘T | File (…" opens the confirm dialog) |
+| Copy Packet Log | ⇧⌘L | File + View |
+| Settings… | ⌘, | App (selects the Settings tab) |
+| Dashboard / Log / Settings | ⌘1 / ⌘2 / ⌘3 | View |
+| Toggle Sidebar | ⌘S | View |
+| Close Window | ⌘W | File |
+| Minimize | ⌘M | Window |
+| Hide / Hide Others | ⌘H / ⌥⌘H | App |
+| Quit | ⌘Q | App |
+| Keyboard Shortcuts… | — | Help (shortcuts dialog) |
+
+None conflict with macOS reserved shortcuts (Cmd+Space, Cmd+Tab,
+Cmd+Shift+3/4/5, Cmd+H is standard Hide). Edit menu carries standard
+Undo/Redo/Cut/Copy/Paste/Select All via the responder chain so text fields
+work with the usual shortcuts.
+
+Session state restored on relaunch: window position/size
+(`frameAutosaveName`) and active tab (`ui.selectedTab`). Preference state:
+SN, auth secret (Keychain), auto-connect, menu-bar SOC label. Ephemeral:
+telemetry, log buffer, connection state (BLE session is per-launch).
+First launch: empty device list + "Set the auth secret in Settings" hint.

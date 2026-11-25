@@ -159,5 +159,10 @@ final class SocRingView: NSView {
         needsLayout = true
         valueLabel.string = soc.map { "\(Int($0.rounded()))" } ?? "—"
         valueLabel.font = Fonts.hero(frame.width * 0.26)
+        // custom-drawn control: declare role/value to the accessibility tree
+        setAccessibilityElement(true)
+        setAccessibilityRole(.progressIndicator)
+        setAccessibilityLabel("State of charge")
+        setAccessibilityValue(soc.map { "\(Int($0.rounded())) percent" } ?? "unknown")
     }
 }
