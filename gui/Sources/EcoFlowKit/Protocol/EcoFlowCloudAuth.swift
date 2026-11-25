@@ -96,6 +96,7 @@ public struct EcoFlowCloudAuth: Sendable {
         }
         var request = URLRequest(url: URL(string: "https://\(host)/auth/login")!)
         request.httpMethod = "POST"
+        request.timeoutInterval = 20   // never hang the sign-in UI
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

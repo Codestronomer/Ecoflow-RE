@@ -21,11 +21,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         MainMenu.install(to: self)
 
+        // SELF-TEST (EF_TEST_SIGNIN=1): drive the sign-in lifecycle headlessly
+        if ProcessInfo.processInfo.environment["EF_TEST_SIGNIN"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                self?.runSignInTest()
+            }
+        }
+
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false   // keep running for the menu bar
+    }
+
+    // SELF-TEST (EF_TEST_SIGNIN=1): drive the sign-in lifecycle with dummy
+    // credentials and log the status so it is observable headlessly.
+    private var testStatusTimer: Timer?
+
+    private func runSignInTest() {
+        guard let svc = windowController?.settingsVCRef else {
+            NSLog("EF-TEST no settings vc"); return
+        }
+        windowController?.selectTab(2)
+        svc.runTestSignIn(identifier: "someone@example.com", password: "wrong-password", sn: "TESTSN0000")
+        var ticks = 0
+        testStatusTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            ticks += 1
+            NSLog("EF-TEST t+\(ticks): '\(svc.statusForTest())' buttonEnabled=\(svc.signInButton.isEnabled) spinnerHidden=\(svc.signInSpinner.isHidden)")
+            if ticks >= 12 { self.testStatusTimer?.invalidate() }
+        }
     }
 
     // MARK: menu actions (target = self)
@@ -92,7 +117,10 @@ struct EcoFlowGUIMain {
 final class MainWindowController: NSWindowController {
     private let model: AppModel
     private var dashboardVC: DashboardViewController!
+    private var logVC: LogViewController!
+    private var settingsVC: SettingsViewController!
     private var detailVCRef: DetailHostViewController?
+    private(set) weak var settingsVCRef: SettingsViewController?
     private var refreshObserver: NSObjectProtocol?
 
     init(model: AppModel) {
@@ -111,8 +139,9 @@ final class MainWindowController: NSWindowController {
         super.init(window: window)
 
         dashboardVC = DashboardViewController(model: model)
-        let logVC = LogViewController(model: model)
-        let settingsVC = SettingsViewController(model: model)
+        self.logVC = LogViewController(model: model)
+        self.settingsVC = SettingsViewController(model: model)
+        settingsVCRef = settingsVC
 
         let sidebarVC = DeviceListViewController(model: model)
         let sidebarItem = NSSplitViewItem(viewController: sidebarVC)
@@ -157,6 +186,7 @@ final class RootSplitViewController: NSSplitViewController {
 
     override func viewDidLayout() {
         super.viewDidLayout()
+        NSLog("EF-FIT pass: split.fitting=\(splitView.fittingSize) pref=\(preferredContentSize) winFrame=\(view.window?.frame ?? .zero)")
         preferredContentSize = NSSize(width: 980, height: 680)
         // one-shot: the first layout pass applies the content's fitting
         // width (259) over the intended 980 — correct it once it has settled
