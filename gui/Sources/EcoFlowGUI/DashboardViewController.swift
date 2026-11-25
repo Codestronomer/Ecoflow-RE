@@ -119,12 +119,8 @@ final class DashboardViewController: NSViewController {
 
         scroll.documentView = document
         scroll.translatesAutoresizingMaskIntoConstraints = false
-        scroll.drawsBackground = true
-        scroll.backgroundColor = .windowBackgroundColor
 
         view = NSView()
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         view.addSubview(scroll)
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: view.topAnchor),

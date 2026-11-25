@@ -21,8 +21,6 @@ final class DeviceListViewController: NSViewController {
 
     override func loadView() {
         view = NSView()
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
 
         connectButton.bezelStyle = .rounded
         connectButton.target = self
@@ -32,6 +30,7 @@ final class DeviceListViewController: NSViewController {
         packsLabel.textColor = .secondaryLabelColor
 
         listDocument.wantsLayer = true
+        listDocument.autoresizingMask = [.width]   // document width follows the clip view
         listScrollView.documentView = listDocument
         listScrollView.hasVerticalScroller = true
         listScrollView.drawsBackground = false
@@ -96,7 +95,7 @@ final class DeviceListViewController: NSViewController {
         var constraints: [NSLayoutConstraint] = [
             cursor.topAnchor.constraint(equalTo: listDocument.topAnchor, constant: 12),
             cursor.leadingAnchor.constraint(equalTo: listDocument.leadingAnchor, constant: 12),
-            cursor.trailingAnchor.constraint(lessThanOrEqualTo: listDocument.trailingAnchor, constant: -12),
+            cursor.trailingAnchor.constraint(equalTo: listDocument.trailingAnchor, constant: -12),
         ]
 
         // session steps
@@ -146,8 +145,12 @@ final class DeviceListViewController: NSViewController {
         }
 
         constraints.append(cursor.bottomAnchor.constraint(lessThanOrEqualTo: listDocument.bottomAnchor, constant: -12))
+        // full-width rows: document spans the clip width, not the fitting width
+        let visibleWidth = max(180, listScrollView.contentView.bounds.width)
+        listDocument.frame = NSRect(origin: .zero,
+                                    size: NSSize(width: visibleWidth, height: cursor.fittingSize.height + 24))
+        cursor.trailingAnchor.constraint(equalTo: listDocument.trailingAnchor, constant: -12).isActive = true
         NSLayoutConstraint.activate(constraints)
-        listDocument.frame = NSRect(origin: .zero, size: cursor.fittingSize)
     }
 
     private func stepRows() -> [NSView] {
@@ -203,13 +206,6 @@ final class DeviceRowView: NSView {
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
-
-        // right-click: Connect (context menu subset per HIG)
-        let menu = NSMenu()
-        menu.addItem(withTitle: "Connect", action: #selector(connectTapped), keyEquivalent: "")
-        menu.autoenablesItems = false
-        for item in menu.items { item.target = self; item.isEnabled = true }
-        self.menu = menu
     }
 
     required init?(coder: NSCoder) { fatalError("not supported") }

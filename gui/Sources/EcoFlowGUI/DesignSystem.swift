@@ -128,19 +128,23 @@ final class MetricTileView: NSView {
 }
 
 // Hero SOC ring (Core Animation ring + centered labels).
+// Declares an intrinsic size so stacks and grids lay it out correctly
+// (a bare NSView collapses or balloons inside NSStackView).
 final class SocRingView: NSView {
     private let track = CAShapeLayer()
     private let arc = CAShapeLayer()
     private let valueLabel = CATextLayer()
-    private let captionLabel = CATextLayer()
+    private let ringSize: CGFloat
 
     init(size: CGFloat) {
+        ringSize = size
         super.init(frame: NSRect(x: 0, y: 0, width: size, height: size))
         wantsLayer = true
+        translatesAutoresizingMaskIntoConstraints = false
         layer?.cornerRadius = size / 2
 
         track.fillColor = .clear
-        track.strokeColor = NSColor.secondaryLabelColor.withAlphaComponent(0.15).cgColor
+        track.strokeColor = NSColor.secondaryLabelColor.withAlphaComponent(0.25).cgColor
         track.lineWidth = 12
         track.lineCap = .round
 
@@ -155,16 +159,26 @@ final class SocRingView: NSView {
         valueLabel.alignmentMode = .center
         valueLabel.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
 
-        captionLabel.string = "SOC %"
-        captionLabel.font = Fonts.caption
-        captionLabel.foregroundColor = NSColor.secondaryLabelColor.cgColor
-        captionLabel.alignmentMode = .center
-        captionLabel.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
+        for l in [track, arc, valueLabel] { layer?.addSublayer(l) }
 
-        for l in [track, arc, valueLabel, captionLabel] { layer?.addSublayer(l) }
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: size),
+            heightAnchor.constraint(equalToConstant: size),
+        ])
     }
 
     required init?(coder: NSCoder) { fatalError("not supported") }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: ringSize, height: ringSize)
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        let scale = window?.backingScaleFactor ?? 2
+        valueLabel.contentsScale = scale
+        layer?.contentsScale = scale
+    }
 
     override func layout() {
         super.layout()
@@ -175,9 +189,7 @@ final class SocRingView: NSView {
         track.path = path
         arc.path = path
         arc.strokeEnd = CGFloat(socFraction) * 0.999
-        let midY = b.midY
-        valueLabel.frame = CGRect(x: 0, y: midY + 2, width: b.width, height: b.height * 0.28)
-        captionLabel.frame = CGRect(x: 0, y: midY - b.height * 0.16, width: b.width, height: 14)
+        valueLabel.frame = CGRect(x: 0, y: b.midY - b.height * 0.14, width: b.width, height: b.height * 0.28)
     }
 
     private var socFraction: Double = 0
@@ -194,4 +206,18 @@ final class SocRingView: NSView {
         setAccessibilityLabel("State of charge")
         setAccessibilityValue(soc.map { "\(Int($0.rounded())) percent" } ?? "unknown")
     }
+}
+
+// Thin horizontal hairline separator.
+final class DividerView: NSView {
+    init() {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.6).cgColor
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: 1),
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError("not supported") }
 }

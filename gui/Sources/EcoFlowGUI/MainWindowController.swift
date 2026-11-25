@@ -4,7 +4,7 @@ import AppKit
 import EcoFlowKit
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     var windowController: MainWindowController?
     var statusBar: StatusBarController?
@@ -50,12 +50,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let alert = NSAlert()
         alert.messageText = "Keyboard Shortcuts"
         alert.informativeText = """
-        Connect  ⇧⌘C    Disconnect  ⇧⌘D
-        Set Device Clock…  ⇧⌘T
-        Copy Packet Log  ⇧⌘L
-        Dashboard / Log / Settings  ⌘1 / ⌘2 / ⌘3
-        Settings…  ⌘,    Close Window  ⌘W
-        Minimize  ⌘M    Hide  ⌘H    Quit  ⌘Q
+        Connect  \u{21e7}\u{2318}C    Disconnect  \u{21e7}\u{2318}D
+        Set Device Clock…  \u{21e7}\u{2318}T
+        Copy Packet Log  \u{21e7}\u{2318}L
+        Dashboard / Log / Settings  \u{2318}1 / \u{2318}2 / \u{2318}3
+        Settings…  \u{2318},    Close Window  \u{2318}W
+        Minimize  \u{2318}M    Hide  \u{2318}H    Quit  \u{2318}Q
         """
         alert.runModal()
     }
@@ -84,7 +84,6 @@ struct EcoFlowGUIMain {
         let delegate = MainActor.assumeIsolated { AppDelegate() }
         app.delegate = delegate
         app.setActivationPolicy(.regular)
-        app.activate()                      // foreground the app at launch (macOS 14+)
         app.run()
     }
 }
@@ -93,7 +92,7 @@ struct EcoFlowGUIMain {
 final class MainWindowController: NSWindowController {
     private let model: AppModel
     private var dashboardVC: DashboardViewController!
-    private var detailVC: DetailHostViewController!
+    private var detailVCRef: DetailHostViewController?
     private var refreshObserver: NSObjectProtocol?
 
     init(model: AppModel) {
@@ -106,9 +105,9 @@ final class MainWindowController: NSWindowController {
         window.titlebarAppearsTransparent = true
         window.backgroundColor = .windowBackgroundColor
         window.isOpaque = true
-        window.autorecalculatesKeyViewLoop = true   // keep Tab order correct as views come and go
-        // appear on the active Space; support native fullscreen (green button)
-        window.collectionBehavior = [.moveToActiveSpace, .fullScreenPrimary, .fullScreenAuxiliary]
+        // appear on the active Space (and alongside fullscreen apps) instead
+        // of spawning an invisible background Space
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         super.init(window: window)
 
         dashboardVC = DashboardViewController(model: model)
@@ -122,19 +121,15 @@ final class MainWindowController: NSWindowController {
         sidebarItem.canCollapse = false
         let detailVC = DetailHostViewController(
             dashboard: dashboardVC.view, log: logVC.view, settings: settingsVC.view)
-        self.detailVC = detailVC
+        detailVCRef = detailVC
         let detailItem = NSSplitViewItem(viewController: detailVC)
 
-        let split = NSSplitViewController()
+        let split = RootSplitViewController()
         split.addSplitViewItem(sidebarItem)
         split.addSplitViewItem(detailItem)
         window.contentViewController = split
         window.setContentSize(NSSize(width: 980, height: 680))
         window.center()
-        window.setFrameAutosaveName("MainWindow")   // session state: restore position/size
-        // session state: restore the active tab
-        let savedTab = UserDefaults.standard.integer(forKey: "ui.selectedTab")
-        detailVC.selectTab(min(max(savedTab, 0), 2))
         refreshObserver = NotificationCenter.default.addObserver(
             forName: .appModelChanged, object: model, queue: .main
         ) { [weak self] _ in
@@ -145,11 +140,34 @@ final class MainWindowController: NSWindowController {
     required init?(coder: NSCoder) { fatalError("not supported") }
 
     func selectTab(_ index: Int) {
-        detailVC?.selectTab(index)
+        detailVCRef?.selectTab(index)
         UserDefaults.standard.set(index, forKey: "ui.selectedTab")
     }
 
     deinit { if let o = refreshObserver { NotificationCenter.default.removeObserver(o) } }
+}
+
+// NSSplitViewController updates its own preferredContentSize from its
+// (tiny) fitting size on layout, and the window then resizes to it —
+// which collapsed the window. Re-assert the intended size after every
+// layout pass so the window can never shrink below it.
+@MainActor
+final class RootSplitViewController: NSSplitViewController {
+    private var didAssertInitialSize = false
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        preferredContentSize = NSSize(width: 980, height: 680)
+        // one-shot: the first layout pass applies the content's fitting
+        // width (259) over the intended 980 — correct it once it has settled
+        if !didAssertInitialSize, let w = view.window, w.isVisible {
+            didAssertInitialSize = true
+            if w.frame.width < 980 {
+                w.setContentSize(NSSize(width: 980, height: 680))
+                w.center()
+            }
+        }
+    }
 }
 
 // Detail tab host: segmented control switching three child views.
