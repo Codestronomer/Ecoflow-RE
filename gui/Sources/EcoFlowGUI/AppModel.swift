@@ -256,7 +256,6 @@ final class AppModel {
             inputWatts = Int(u16(9))
             outputWatts = Int(u16(11))
             mosTemp = Int(p[32])
-            acEnabled = p[43] != 0   // cfg_ac_enabled — verified map offset
         case (0x05, 0x20, 0x02) where p.count >= 73:          // MPPT heartbeat 121B
             let inVol = Double(u16(8) | (UInt16(p[10]) << 16) | (UInt16(p[11]) << 24)) / 100.0
             mpptInVoltage = inVol
@@ -265,6 +264,10 @@ final class AppModel {
             if !isPlaceholder(42) { dc12vWatts = Int(u16(42)) }       // dcdc12v_watts
             if !isPlaceholder(52) { carOutWatts = Int(u16(52)) }      // car_out_watts
             dc24vState = Int(p[59])                                    // dc24v_state
+            // hardware-verified on this unit: cfgAc tracks the relay state
+            // (byte 71 of the 121B MPPT heartbeat); note it lags the relay a
+            // few seconds after a toggle (soft-start)
+            acEnabled = p[71] != 0
         case (0x03, 0x03, 0x0e) where p.count >= 5:           // sub-pack info 83B
             let count = Int(u16(3))
             var list: [String?] = []
