@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let main = MainWindowController(model: model)
         main.showWindow(nil)
+        main.window?.makeKeyAndOrderFront(nil)
         windowController = main
 
         let status = StatusBarController(model: model)
@@ -51,6 +52,11 @@ final class MainWindowController: NSWindowController {
         window.title = "EcoFlow E980"
         window.minSize = NSSize(width: 860, height: 600)
         window.titlebarAppearsTransparent = true
+        window.backgroundColor = .windowBackgroundColor
+        window.isOpaque = true
+        // appear on the active Space (and alongside fullscreen apps) instead
+        // of spawning an invisible background Space
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         super.init(window: window)
 
         dashboardVC = DashboardViewController(model: model)
@@ -62,7 +68,6 @@ final class MainWindowController: NSWindowController {
         sidebarItem.minimumThickness = 200
         sidebarItem.maximumThickness = 260
         sidebarItem.canCollapse = false
-
         let detailVC = DetailHostViewController(
             dashboard: dashboardVC.view, log: logVC.view, settings: settingsVC.view)
         let detailItem = NSSplitViewItem(viewController: detailVC)
@@ -71,7 +76,6 @@ final class MainWindowController: NSWindowController {
         split.addSplitViewItem(sidebarItem)
         split.addSplitViewItem(detailItem)
         window.contentViewController = split
-
         refreshObserver = NotificationCenter.default.addObserver(
             forName: .appModelChanged, object: model, queue: .main
         ) { [weak self] _ in
@@ -87,12 +91,12 @@ final class MainWindowController: NSWindowController {
 // Detail tab host: segmented control switching three child views.
 @MainActor
 final class DetailHostViewController: NSViewController {
-    private let segmented: NSSegmentedControl
+    private let segmented = NSSegmentedControl(labels: ["Dashboard", "Log"],
+                                               trackingMode: .selectOne,
+                                               target: nil, action: nil)
     private var tabViews: [(view: NSView, isSettings: Bool)]
 
     init(dashboard: NSView, log: NSView, settings: NSView) {
-        segmented = NSSegmentedControl(labels: ["Dashboard", "Log"],
-                                       trackingMode: .selectOne, target: nil, action: nil)
         tabViews = [(dashboard, false), (log, false), (settings, true)]
         super.init(nibName: nil, bundle: nil)
         segmented.target = self
@@ -104,30 +108,31 @@ final class DetailHostViewController: NSViewController {
 
     @objc private func switchTab() {
         let idx = segmented.selectedSegment
-        for (i, child) in children.enumerated() { child.view.isHidden = (i != idx) }
+        for (i, tab) in tabViews.enumerated() { tab.view.isHidden = (i != idx) }
     }
 
     override func loadView() {
         view = NSView()
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
 
         segmented.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(segmented)
 
-        for child in children {
-            child.view.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(child.view)
+        var edgeConstraints: [NSLayoutConstraint] = []
+        for tab in tabViews {
+            tab.view.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(tab.view)
+            edgeConstraints.append(contentsOf: [
+                tab.view.topAnchor.constraint(equalTo: view.topAnchor, constant: 44),
+                tab.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                tab.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                tab.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            ])
         }
 
-        let constraints: [NSLayoutConstraint] = tabViews.flatMap { child in
-            [
-                child.view.topAnchor.constraint(equalTo: view.topAnchor, constant: 44),
-                child.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-                child.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                child.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            ]
-        }
         NSLayoutConstraint.activate(
-            constraints + [
+            edgeConstraints + [
                 segmented.topAnchor.constraint(equalTo: view.topAnchor, constant: 10),
                 segmented.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Design.cardPadding),
             ]
