@@ -34,6 +34,7 @@ struct EcoFlowGUIMain {
         let delegate = MainActor.assumeIsolated { AppDelegate() }
         app.delegate = delegate
         app.setActivationPolicy(.regular)
+        app.activate()                      // foreground the app at launch (macOS 14+)
         app.run()
     }
 }
@@ -54,6 +55,7 @@ final class MainWindowController: NSWindowController {
         window.titlebarAppearsTransparent = true
         window.backgroundColor = .windowBackgroundColor
         window.isOpaque = true
+        window.autorecalculatesKeyViewLoop = true   // keep Tab order correct as views come and go
         // appear on the active Space (and alongside fullscreen apps) instead
         // of spawning an invisible background Space
         window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
