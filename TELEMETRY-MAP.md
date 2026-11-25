@@ -190,6 +190,8 @@ fields, parse order confirmed in `eu.t.t()` via `eu.t.f()`); verified by
 | 60 | 1 | chg_pause_flag |
 | 61 | 1 | dc_dip_switch |
 | 62..121 | — | variant fields (cfgFast/SlowChgWatts, cfgDcChgCurrent, beepMode, cfgAc*, standby mins…; eu.v adds 29B, eu.x adds 27B) |
+| 88..90 | 3 | ac-related values zero when AC off (08 32 02 ↔ 00 00 00) |
+| **107** | 1 | **cfgAc — LIVE-VERIFIED** (payload diff around AC off→on commands via EF_AC_PROBE; byte 71 was wrong for this firmware; lags the relay a few seconds — soft-start) |
 
 ## EMS heartbeat — 147B (src=2, cmd 0x20/0x02) → eu.d base + eu.y/eu.w variant
 
