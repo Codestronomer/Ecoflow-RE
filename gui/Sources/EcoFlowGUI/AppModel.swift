@@ -118,6 +118,10 @@ final class AppModel {
         session?.connect(to: device.id)
     }
 
+    func clearFailure() {
+        failureText = nil
+    }
+
     // MARK: commands
 
     func setAC(_ on: Bool) {

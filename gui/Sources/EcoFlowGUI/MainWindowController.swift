@@ -10,7 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var statusBar: StatusBarController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSLog("EF-LAUNCH: didFinishLaunching entered")
         let main = MainWindowController(model: model)
+        NSLog("EF-LAUNCH: window controller created")
         main.showWindow(nil)
         main.window?.makeKeyAndOrderFront(nil)
         windowController = main
@@ -105,7 +107,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct EcoFlowGUIMain {
     static func main() {
+        NSLog("EF-LAUNCH: main entered")
         let app = NSApplication.shared
+        NSLog("EF-LAUNCH: app shared")
         let delegate = MainActor.assumeIsolated { AppDelegate() }
         app.delegate = delegate
         app.setActivationPolicy(.regular)
@@ -121,6 +125,7 @@ final class MainWindowController: NSWindowController {
     private var settingsVC: SettingsViewController!
     private var detailVCRef: DetailHostViewController?
     private(set) weak var settingsVCRef: SettingsViewController?
+    private var lastShownFailure: String?
     private var refreshObserver: NSObjectProtocol?
 
     init(model: AppModel) {
@@ -162,11 +167,29 @@ final class MainWindowController: NSWindowController {
         refreshObserver = NotificationCenter.default.addObserver(
             forName: .appModelChanged, object: model, queue: .main
         ) { [weak self] _ in
-            self?.dashboardVC.refresh()
+            guard let self else { return }
+            self.dashboardVC.refresh()
+            // connection failures surface as a sheet (busy device, bluetooth
+            // off, wrong secret, device not found…)
+            if let failure = self.model.failureText, failure != self.lastShownFailure {
+                self.lastShownFailure = failure
+                self.showFailureAlert(failure)
+            }
         }
     }
 
     required init?(coder: NSCoder) { fatalError("not supported") }
+
+    private func showFailureAlert(_ text: String) {
+        guard let window = window else { return }
+        let alert = NSAlert()
+        alert.messageText = "Connection problem"
+        alert.informativeText = text
+        alert.addButton(withTitle: "OK")
+        alert.beginSheetModal(for: window) { [weak self] _ in
+            self?.model.clearFailure()
+        }
+    }
 
     func selectTab(_ index: Int) {
         detailVCRef?.selectTab(index)
