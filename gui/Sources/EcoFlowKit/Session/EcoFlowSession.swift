@@ -98,6 +98,11 @@ public final class EcoFlowSession: TransportDelegate {
         setPhase(.idle)
     }
 
+    /// Connect to a specific discovered device (manual pick from the UI).
+    public func connect(to id: UUID) {
+        connect(id: id)
+    }
+
     /// Queue a command; sent immediately when live, else after auth success.
     public func sendCommand(src: UInt8, dst: UInt8, cmdFunc: UInt8, cmdId: UInt8,
                             payload: [UInt8], label: String = "user-cmd") {

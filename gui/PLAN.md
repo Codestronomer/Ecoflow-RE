@@ -131,7 +131,7 @@ gui/
 - [ ] Acceptance: app launches, lists the E980, connects and reaches `.live`
       (session pane shows steps), log fills; disconnect works; menu bar item
       shows SOC and the popover controls the same session.
-- [ ] Commit: "Add SwiftUI shell, design system and menu bar".
+- [ ] Commit: "Add AppKit shell, design system and menu bar".
 
 ## M3 — Live dashboard
 

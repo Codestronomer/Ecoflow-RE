@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "EcoFlowKit", targets: ["EcoFlowKit"]),
         .executable(name: "EcoFlowCLI", targets: ["EcoFlowCLI"]),
+        .executable(name: "EcoFlowGUI", targets: ["EcoFlowGUI"]),
     ],
     targets: [
         .target(
@@ -15,6 +16,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "EcoFlowCLI",
+            dependencies: ["EcoFlowKit"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .executableTarget(
+            name: "EcoFlowGUI",
             dependencies: ["EcoFlowKit"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
