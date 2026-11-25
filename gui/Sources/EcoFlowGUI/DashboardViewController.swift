@@ -17,6 +17,9 @@ final class DashboardViewController: NSViewController {
     private let pvTile: MetricTileView
     private let chargeTile: MetricTileView
     private let packsTile: MetricTileView
+    private let dcTile: MetricTileView
+    private let carTile: MetricTileView
+    private let auxTile: MetricTileView
     private let acSwitch = NSSwitch()
     private let acStateLabel = NSTextField(labelWithString: "")
     private let clockButton = NSButton(title: "Set to now…", target: nil, action: nil)
@@ -34,6 +37,9 @@ final class DashboardViewController: NSViewController {
         pvTile = MetricTileView(title: "PV voltage", symbol: "sun.max.fill")
         chargeTile = MetricTileView(title: "Charge state", symbol: "powerplug.fill")
         packsTile = MetricTileView(title: "Packs", symbol: "square.stack.3d.up")
+        dcTile = MetricTileView(title: "DC 12V", symbol: "car.fill")
+        carTile = MetricTileView(title: "Car outlet", symbol: "car")
+        auxTile = MetricTileView(title: "24V aux", symbol: "bolt.fill")
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("not supported") }
@@ -76,6 +82,7 @@ final class DashboardViewController: NSViewController {
             [packTile, currentTile, inTile],
             [outTile, tempTile, cyclesTile],
             [pvTile, chargeTile, packsTile],
+            [dcTile, carTile, auxTile],
         ])
         grid.rowSpacing = Design.gridGap
         grid.columnSpacing = Design.gridGap
@@ -109,7 +116,8 @@ final class DashboardViewController: NSViewController {
 
         // each tile keeps a reasonable minimum width
         for t: MetricTileView in [packTile, currentTile, inTile, outTile, tempTile,
-                                  cyclesTile, pvTile, chargeTile, packsTile] {
+                                  cyclesTile, pvTile, chargeTile, packsTile,
+                                  dcTile, carTile, auxTile] {
             t.widthAnchor.constraint(greaterThanOrEqualToConstant: 150).isActive = true
         }
 
@@ -189,11 +197,17 @@ final class DashboardViewController: NSViewController {
         pvTile.setValue(model.mpptInVoltage.map { String(format: "%.2f V", $0) } ?? "—")
         chargeTile.setValue(model.chargeState.map { "\($0)" } ?? "—")
         packsTile.setValue("\(model.packs.count) detected")
+        dcTile.setValue(model.dc12vWatts.map { "\($0) W" } ?? "—")
+        carTile.setValue(model.carOutWatts.map { "\($0) W" } ?? "—")
+        auxTile.setValue(model.dc24vState.map { "state \($0)" } ?? "—")
         let live = model.phase == .live
         acSwitch.isEnabled = live
         clockButton.isEnabled = live
-        if let ac = model.acEnabled { acSwitch.state = ac ? .on : .off }
+        // never assume: label says "unknown" until the device reports
+        if let ac = model.acEnabled {
+            acSwitch.state = ac ? .on : .off
+        }
         acStateLabel.stringValue = "Device-reported AC state"
-            + (model.acEnabled.map { $0 ? " · on" : " · off" } ?? "")
+            + (model.acEnabled.map { $0 ? " · on" : " · off" } ?? " · unknown — waiting for the device")
     }
 }

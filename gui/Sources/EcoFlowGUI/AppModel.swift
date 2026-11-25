@@ -26,6 +26,9 @@ final class AppModel {
     private(set) var acEnabled: Bool?
     private(set) var mpptInVoltage: Double?
     private(set) var chargeState: Int?
+    private(set) var dc12vWatts: Int?
+    private(set) var carOutWatts: Int?
+    private(set) var dc24vState: Int?
     private(set) var packs: [String?] = []
     private(set) var lastFrameDate: Date?
 
@@ -57,7 +60,7 @@ final class AppModel {
         sn = d.string(forKey: Keys.sn) ?? ""
         autoConnect = d.object(forKey: Keys.autoConnect) as? Bool ?? true
         showSOCInMenuBar = d.object(forKey: Keys.menuSOC) as? Bool ?? true
-        authSecret = KeychainStore.load() ?? ""
+        authSecret = SecretStore.load() ?? ""
     }
 
     var hasSecret: Bool { !authSecret.isEmpty }
@@ -89,6 +92,7 @@ final class AppModel {
         inputWatts = nil; outputWatts = nil
         batteryTemp = nil; mosTemp = nil; cycles = nil
         acEnabled = nil; mpptInVoltage = nil; chargeState = nil
+        dc12vWatts = nil; carOutWatts = nil; dc24vState = nil
         packs = []; lastFrameDate = nil; stale = false
 
         var config = EcoFlowSession.Config()
@@ -141,7 +145,7 @@ final class AppModel {
         d.set(sn, forKey: Keys.sn)
         d.set(autoConnect, forKey: Keys.autoConnect)
         d.set(showSOCInMenuBar, forKey: Keys.menuSOC)
-        if authSecret.isEmpty { KeychainStore.delete() } else { KeychainStore.save(authSecret) }
+        if authSecret.isEmpty { SecretStore.delete() } else { SecretStore.save(authSecret) }
     }
 
     // MARK: event handling
@@ -225,7 +229,15 @@ final class AppModel {
             guard p.count >= i + 4 else { return nil }
             return Double(Float(bitPattern: u32(i)))
         }
-        func isPlaceholder(_ i: Int) -> Bool { u32(i) == 0x04040404 }
+        // The serializer fills non-reporting fields with 0x04 runs (0x04040404)
+        // or their bitwise complement (0xFBFBFBxx). Treat any u32 whose top
+        // three bytes are all 0x04 or all 0xFB as "no data".
+        func isPlaceholder(_ i: Int) -> Bool {
+            guard p.count >= i + 4 else { return true }
+            let b = (p[i], p[i+1], p[i+2])
+            return (b.0 == 0x04 && b.1 == 0x04 && b.2 == 0x04)
+                || (b.0 == 0xFB && b.1 == 0xFB && b.2 == 0xFB)
+        }
 
         switch (f.src, f.cmdFunc, f.cmdId) {
         case (0x03, 0x20, 0x02) where p.count >= 46:          // BMS heartbeat 55B
@@ -233,24 +245,26 @@ final class AppModel {
         case (0x03, 0x20, 0x32) where p.count >= 69:          // BMS detailed 188B
             soc = f32(53).map { $0 / 256.0 } ?? soc
             packVoltage = Double(u16(12)) / 1000
-            if p[18] == 0x04 && p[19] == 0x04 {
-                current = Double(Int16(bitPattern: u16(16))) / 1000
-            } else {
+            if !isPlaceholder(16) {
                 current = Double(Int32(bitPattern: u32(16))) / 1000
             }
             batteryTemp = Int(p[20])
-            if !isPlaceholder(34) { cycles = Int(u32(34)) }
+            if !isPlaceholder(34) { cycles = Int(u32(34)) }   // fixes 67372198
             if !isPlaceholder(57) { inputWatts = Int(u32(57)) }
             if !isPlaceholder(61) { outputWatts = Int(u32(61)) }
         case (0x04, 0x20, 0x02) where p.count >= 45:          // INV heartbeat 70B
             inputWatts = Int(u16(9))
             outputWatts = Int(u16(11))
             mosTemp = Int(p[32])
+            acEnabled = p[43] != 0   // cfg_ac_enabled — verified map offset
         case (0x05, 0x20, 0x02) where p.count >= 73:          // MPPT heartbeat 121B
             let inVol = Double(u16(8) | (UInt16(p[10]) << 16) | (UInt16(p[11]) << 24)) / 100.0
             mpptInVoltage = inVol
             chargeState = Int(p[33])
-            acEnabled = p[71] != 0
+            // verified MPPT map offsets (DirectMpptHeartbeatPack)
+            if !isPlaceholder(42) { dc12vWatts = Int(u16(42)) }       // dcdc12v_watts
+            if !isPlaceholder(52) { carOutWatts = Int(u16(52)) }      // car_out_watts
+            dc24vState = Int(p[59])                                    // dc24v_state
         case (0x03, 0x03, 0x0e) where p.count >= 5:           // sub-pack info 83B
             let count = Int(u16(3))
             var list: [String?] = []
