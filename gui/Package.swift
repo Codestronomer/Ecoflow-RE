@@ -18,9 +18,12 @@ let package = Package(
             dependencies: ["EcoFlowKit"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
-        .testTarget(
+        // self-test executable (Swift Testing macros are unreliable on CLT-only
+        // toolchains — this runs anywhere via `swift run EcoFlowKitTests`)
+        .executableTarget(
             name: "EcoFlowKitTests",
             dependencies: ["EcoFlowKit"],
+            path: "Tests/EcoFlowKitTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]

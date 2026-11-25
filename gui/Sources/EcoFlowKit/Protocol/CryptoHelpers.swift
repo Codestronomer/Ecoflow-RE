@@ -2,7 +2,7 @@
 import Foundation
 import CommonCrypto
 
-func md5(_ data: Data) -> Data {
+public func md5(_ data: Data) -> Data {
     var d = [UInt8](repeating: 0, count: Int(CC_MD5_DIGEST_LENGTH))
     _ = data.withUnsafeBytes { ptr in
         CC_MD5(ptr.baseAddress, CC_LONG(data.count), &d)
@@ -10,7 +10,7 @@ func md5(_ data: Data) -> Data {
     return Data(d)
 }
 
-func aesCBCEncrypt(_ input: Data, key: Data, iv: Data) -> Data? {
+public func aesCBCEncrypt(_ input: Data, key: Data, iv: Data) -> Data? {
     guard key.count == kCCKeySizeAES128 else { return nil }
     var out = [UInt8](repeating: 0, count: input.count + kCCBlockSizeAES128)
     var outLen = 0
@@ -29,7 +29,7 @@ func aesCBCEncrypt(_ input: Data, key: Data, iv: Data) -> Data? {
     return status == kCCSuccess ? Data(out.prefix(outLen)) : nil
 }
 
-func aesCBCDecrypt(_ input: Data, key: Data, iv: Data) -> Data? {
+public func aesCBCDecrypt(_ input: Data, key: Data, iv: Data) -> Data? {
     guard key.count == kCCKeySizeAES128, input.count % 16 == 0, !input.isEmpty else { return nil }
     var out = [UInt8](repeating: 0, count: input.count + kCCBlockSizeAES128)
     var outLen = 0
@@ -49,9 +49,9 @@ func aesCBCDecrypt(_ input: Data, key: Data, iv: Data) -> Data? {
 }
 
 // [UInt8] convenience overloads
-func aesCBCEncrypt(_ input: [UInt8], key: [UInt8], iv: [UInt8]) -> Data? {
+public func aesCBCEncrypt(_ input: [UInt8], key: [UInt8], iv: [UInt8]) -> Data? {
     aesCBCEncrypt(Data(input), key: Data(key), iv: Data(iv))
 }
-func aesCBCDecrypt(_ input: [UInt8], key: [UInt8], iv: [UInt8]) -> Data? {
+public func aesCBCDecrypt(_ input: [UInt8], key: [UInt8], iv: [UInt8]) -> Data? {
     aesCBCDecrypt(Data(input), key: Data(key), iv: Data(iv))
 }

@@ -4,12 +4,12 @@
 
 import Foundation
 
-struct Big {
+public struct Big {
     var d: [UInt32]   // little-endian base 2^32, fixed 14 limbs (448-bit headroom) — products need 10
 
     init() { d = [UInt32](repeating: 0, count: 14) }
     init(_ v: UInt32) { d = [UInt32](repeating: 0, count: 14); d[0] = v }
-    init(_ bytes: [UInt8]) {  // big-endian bytes
+    public init(_ bytes: [UInt8]) {  // big-endian bytes
         d = [UInt32](repeating: 0, count: 14)
         var byteIndex = bytes.count
         var limb = 0
@@ -156,7 +156,7 @@ struct Big {
 }
 
 // secp160r1
-struct Curve160 {
+public struct Curve160 {
     static let p = Big([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
                         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF])
     static let a = Big([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -221,13 +221,13 @@ struct Curve160 {
     }
 
     // public key: 40 bytes X || Y
-    static func publicKey(priv: Big) -> [UInt8] {
+    public static func publicKey(priv: Big) -> [UInt8] {
         let P = mul(priv, Point(x: gx, y: gy))
         return P.x.toBytes(20) + P.y.toBytes(20)
     }
 
     // shared secret: X(priv * devPub), 20 bytes
-    static func sharedSecret(priv: Big, devPub: [UInt8]) -> [UInt8] {
+    public static func sharedSecret(priv: Big, devPub: [UInt8]) -> [UInt8] {
         let dx = Big(Array(devPub[0..<20]))
         let dy = Big(Array(devPub[20..<40]))
         let P = mul(priv, Point(x: dx, y: dy))

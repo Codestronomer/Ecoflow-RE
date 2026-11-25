@@ -8,16 +8,17 @@
 
 import Foundation
 
-struct SessionHandshake {
+public struct SessionHandshake {
+    public init() {}
     var privKey = Big()          // 20B significant
-    var pubKey = [UInt8]()       // 40B
-    var devPubKey = [UInt8]()    // 40B
-    var shareKey = [UInt8]()     // 20B
-    var aesKey = [UInt8]()       // 16B
-    var aesIv = [UInt8]()        // 16B (md5(share[0:20]))
-    var sessionKey = [UInt8]()   // 16B
-    var sRand = [UInt8]()        // 16B
-    var seed = [UInt8]()         // 2B
+    public var pubKey = [UInt8]()       // 40B
+    public var devPubKey = [UInt8]()    // 40B
+    public var shareKey = [UInt8]()     // 20B
+    public var aesKey = [UInt8]()       // 16B
+    public var aesIv = [UInt8]()        // 16B (md5(share[0:20]))
+    public var sessionKey = [UInt8]()   // 16B
+    public var sRand = [UInt8]()        // 16B
+    public var seed = [UInt8]()         // 2B
     var stage: Stage = .idle
 
     enum Stage {
@@ -36,7 +37,7 @@ struct SessionHandshake {
         }
         return t
     }()
-    static func crc16(_ data: [UInt8]) -> UInt16 {
+    public static func crc16(_ data: [UInt8]) -> UInt16 {
         var c: UInt16 = 0
         for b in data { c = SessionHandshake.crc16Tab[Int((c ^ UInt16(b)) & 0xFF)] ^ (c >> 8) }
         return c
@@ -46,7 +47,7 @@ struct SessionHandshake {
     // against app and device frames: crc8(aa022000)=0x1b, crc8(aa020000)=0xb5)
     // CRC8 — MSB-first, poly 0x07, init 0 (matches the device's crc table:
     // crc8(aa020000)=0xb5, crc8(aa022000)=0x1b, crc8(aa02bc00)=0x06)
-    static func crc8(_ data: [UInt8]) -> UInt8 {
+    public static func crc8(_ data: [UInt8]) -> UInt8 {
         var c: UInt8 = 0
         for b in data {
             c ^= b
@@ -58,7 +59,7 @@ struct SessionHandshake {
     }
 
     // Build a plaintext V4 frame: 5a5a 00 01 lenLE payload crc16LE
-    static func buildPlaintext(_ payload: [UInt8], version: UInt8 = 0x01) -> Data {
+    public static func buildPlaintext(_ payload: [UInt8], version: UInt8 = 0x01) -> Data {
         let len = payload.count + 2
         var f: [UInt8] = [0x5A, 0x5A, 0x00, version,
                           UInt8(len & 0xFF), UInt8((len >> 8) & 0xFF)]
@@ -75,7 +76,7 @@ struct SessionHandshake {
     //     <payload len B> <crc16 over the whole frame minus 2B>
     //   ct    = AES-128-CBC(sessionKey, iv, inner + PKCS pad)
     //   outer = 5a5a 10 01 lenLE(ct+2) ct crc16LE
-    static func buildAaFrame(len: UInt8, flags: UInt8, ctr: UInt32, ctr2: UInt32,
+    public static func buildAaFrame(len: UInt8, flags: UInt8, ctr: UInt32, ctr2: UInt32,
                              src: UInt8, dst: UInt8, cmdFunc: UInt8, cmdId: UInt8,
                              payload: [UInt8]) -> [UInt8] {
         var f: [UInt8] = [0xAA, 0x02, len, 0x00]           // magic, type, len u16 LE
@@ -112,7 +113,7 @@ struct SessionHandshake {
     }
 
     // build an encrypted frame whose inner is an AA-frame
-    static func buildAaEncrypted(src: UInt8, dst: UInt8, cmdFunc: UInt8, cmdId: UInt8,
+    public static func buildAaEncrypted(src: UInt8, dst: UInt8, cmdFunc: UInt8, cmdId: UInt8,
                                  payload: [UInt8], ctr: UInt32, ctr2: UInt32,
                                  key: [UInt8], iv: [UInt8]) -> Data {
         let inner = buildAaFrame(len: UInt8(payload.count), flags: 0x0d,
@@ -133,7 +134,7 @@ struct SessionHandshake {
     }
 
     // Decrypt an encrypted frame body: AES-CBC → PKCS-unpad → raw AA-frame bytes
-    static func decryptBody(_ cipher: [UInt8], key: [UInt8], iv: [UInt8]) -> [UInt8]? {
+    public static func decryptBody(_ cipher: [UInt8], key: [UInt8], iv: [UInt8]) -> [UInt8]? {
         guard cipher.count % 16 == 0, !cipher.isEmpty else { return nil }
         guard let plainData = aesCBCDecrypt(cipher, key: key, iv: iv) else { return nil }
         var plain = [UInt8](plainData)
@@ -146,36 +147,14 @@ struct SessionHandshake {
         return plain
     }
 
-    // Parse an AA-frame (the inner session frame). Fully verified layout:
-    //   aa 02 <len u16 LE> <hdr-crc8> <flags> <ctr u32 LE> <seq u16 LE>
-    //   <src> <dst> <cmd_func> <cmd_id> <payload len B> <crc16 2B>
-    // Payload obfuscation (verified across 1,090 frames): when header byte [6]
-    // != 0x04 the payload is XOR-masked with ([6] ^ 0x04); 0x04 means clear.
-    static func parseAaFrame(_ data: [UInt8]) -> (src: UInt8, dst: UInt8, cmdFunc: UInt8, cmdId: UInt8, payload: [UInt8], len: UInt16, seq: UInt16, ctr: UInt32, obfuscated: Bool, crcOk: Bool)? {
-        guard data.count >= 18, data[0] == 0xAA, (data[1] & 0x0F) == 0x02 else { return nil }
-        let len = UInt16(data[2]) | (UInt16(data[3]) << 8)
-        guard data.count >= 16 + Int(len) + 2 else { return nil }
-        let hdrCrcOk = crc8(Array(data[0..<4])) == data[4]
-        let flags = data[5]
-        let ctr = UInt32(data[6]) | (UInt32(data[7]) << 8) | (UInt32(data[8]) << 16) | (UInt32(data[9]) << 24)
-        let seq = UInt16(data[10]) | (UInt16(data[11]) << 8)
-        let src = data[12], dst = data[13], cf = data[14], ci = data[15]
-        let stored = UInt16(data[data.count - 2]) | (UInt16(data[data.count - 1]) << 8)
-        let crcOk = crc16(Array(data[0..<(data.count - 2)])) == stored
-        // Payload obfuscation: only the BMS-style frames use it. header[6] == 0x04
-        // or 0x00 means clear; any other value k means payload ^= (k ^ 0x04).
-        // (Verified: 55B/188B with [6]=0xf5/0xb8/0x81; all other frames have [6]=0x00.)
-        let obfuscated = data[6] != 0x00 && data[6] != 0x04
-        var payload = Array(data[16..<(16 + Int(len))])
-        if obfuscated {
-            let key = data[6] ^ 0x04
-            payload = payload.map { $0 ^ key }
-        }
-        return (src, dst, cf, ci, payload, len, seq, ctr, obfuscated, crcOk && hdrCrcOk)
+    // Parse an AA-frame (the inner session frame). Layout verified against the
+    // app's own codec; model + deobfuscation live in Frame/AaFrame.swift.
+    public static func parseAaFrame(_ data: [UInt8]) -> AaFrame? {
+        AaFrame.parse(data)
     }
 
     // Parse a received V4 frame from a byte buffer. Returns (payload, encrypted, consumed)
-    static func parseV4Frame(_ buf: [UInt8], key: [UInt8], iv: [UInt8]) -> (payload: [UInt8], encrypted: Bool, consumed: Int)? {
+    public static func parseV4Frame(_ buf: [UInt8], key: [UInt8], iv: [UInt8]) -> (payload: [UInt8], encrypted: Bool, consumed: Int)? {
         guard buf.count >= 10, buf[0] == 0x5A, buf[1] == 0x5A else {
             // find header if not at 0
             guard let idx = buf.firstIndex(where: { $0 == 0x5A }) else { return nil }
@@ -264,12 +243,22 @@ struct SessionHandshake {
         return true
     }
 
-    // load login_key table from disk
+    // load login_key table: env var → bytes override → Bundle.main → CWD →
+    // legacy dev-machine path (kept for the CLI on this machine)
+    public static var loginKeyTablePathOverride: String?
+    public static var loginKeyTableBytesOverride: [UInt8]?
     static var loginKeyTable: [UInt8]? = {
-        let paths = [
-            "/Users/macbookpro/dev/ecoflow-decomp/ble/login-key-table.bin",
-            "login-key-table.bin",
-        ]
+        if let b = loginKeyTableBytesOverride { return b }
+        var paths: [String] = []
+        if let env = ProcessInfo.processInfo.environment["ECOFLOW_LOGIN_KEY_TABLE"] {
+            paths.append(env)
+        }
+        if let o = loginKeyTablePathOverride { paths.append(o) }
+        if let res = Bundle.main.url(forResource: "login-key-table", withExtension: "bin") {
+            paths.append(res.path)
+        }
+        paths.append("login-key-table.bin")
+        paths.append("/Users/macbookpro/dev/ecoflow-decomp/ble/login-key-table.bin")
         for p in paths {
             if let d = FileManager.default.contents(atPath: p) { return [UInt8](d) }
         }
@@ -277,7 +266,7 @@ struct SessionHandshake {
         return nil
     }()
 
-    static func sessionKeyFromSeed(seed: [UInt8], sRand: [UInt8]) -> [UInt8] {
+    public static func sessionKeyFromSeed(seed: [UInt8], sRand: [UInt8]) -> [UInt8] {
         guard let tbl = loginKeyTable, seed.count >= 2 else { return [] }
         // EMPIRICALLY VERIFIED via the app's own session (seed 0502 → offset 336):
         // offset = seed[0]*16 + (seed[1]-1)*256   (simple byte-based table indexing)

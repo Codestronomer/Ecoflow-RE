@@ -13,3 +13,8 @@ public func hexBytes(_ s: String) -> [UInt8]? {
     }
     return out
 }
+
+extension Sequence where Element == UInt8 {
+    /// Lowercase hex string (logging + tests).
+    public var hex: String { map { String(format: "%02x", $0) }.joined() }
+}

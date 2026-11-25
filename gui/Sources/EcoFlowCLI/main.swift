@@ -1,5 +1,5 @@
 // EcoFlow CLI — thin wrapper over EcoFlowKit (same flags/behaviour as before
-// the M0 restructure). Protocol logic lives in EcoFlowKit.
+// the M0/M1 restructure). Protocol logic lives in EcoFlowKit.
 import Foundation
 import EcoFlowKit
 
@@ -7,27 +7,32 @@ import EcoFlowKit
 struct EcoFlowMain {
     static func main() {
         let args = Array(CommandLine.arguments.dropFirst())
-        let client = SessionClient()
+        var config = EcoFlowSession.Config()
+        var runtimeSeconds = 300
+        var logfile: String?
+
+        let transport = RealBleTransport()
+        let client = EcoFlowSession(transport: transport, config: config, log: { print($0) })
 
         if args.first == "run" {
             var i = 1
             while i < args.count {
                 switch args[i] {
-                case "--sn": i += 1; client.sn = args[i]
-                case "--id": i += 1; client.targetID = UUID(uuidString: args[i])
-                case "--seconds": i += 1; client.runtimeSeconds = Int(args[i]) ?? 300
-                case "--set-time": client.sendSetTime = true
+                case "--sn": i += 1; config.sn = args[i]
+                case "--id": i += 1; config.targetID = UUID(uuidString: args[i])
+                case "--seconds": i += 1; runtimeSeconds = Int(args[i]) ?? 300
+                case "--set-time": config.sendSetTime = true
                 case "--secret":
                     i += 1
-                    if let b = hexBytes(args[i]) { client.authSecret = b }
+                    if let b = hexBytes(args[i]) { config.authSecret = b }
                     else { print("bad --secret hex"); exit(1) }
                 case "--ac":
                     // verified from the app: AC toggle = 21→05 (MPPT), 0x20/0x42,
                     // payload [state][ff x6]; 0x01=on 0x00=off
                     i += 1
                     let on = (args[i] == "on")
-                    client.enqueueCommand(src: 0x21, dst: 0x05, cmdFunc: 0x20, cmdId: 0x42,
-                                          payload: [on ? 0x01 : 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
+                    client.sendCommand(src: 0x21, dst: 0x05, cmdFunc: 0x20, cmdId: 0x42,
+                                       payload: [on ? 0x01 : 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
                 case "--send-cmd":
                     // --send-cmd <src> <dst> <cmd_func> <cmd_id> <payload-hex>
                     // e.g. RTC: --send-cmd 21 03 03 40 ea070b1611231e07
@@ -35,27 +40,30 @@ struct EcoFlowMain {
                     if let s = UInt8(args[i+1], radix: 16), let d = UInt8(args[i+2], radix: 16),
                        let cf = UInt8(args[i+3], radix: 16), let ci = UInt8(args[i+4], radix: 16),
                        let pl = hexBytes(args[i+5]) {
-                        client.enqueueCommand(src: s, dst: d, cmdFunc: cf, cmdId: ci, payload: pl)
+                        client.sendCommand(src: s, dst: d, cmdFunc: cf, cmdId: ci, payload: pl)
                     } else { print("bad --send-cmd args"); exit(1) }
                     i += 5
                 case "--logfile": i += 1
-                    let path = args[i]
-                    _ = FileManager.default.createFile(atPath: path, contents: nil)
-                    if let fh = FileHandle(forWritingAtPath: path) {
-                        dup2(fh.fileDescriptor, 1); dup2(fh.fileDescriptor, 2); setbuf(stdout, nil)
-                    }
+                    logfile = args[i]
                 default: break
                 }
                 i += 1
             }
-            client.runtimeSeconds = max(client.runtimeSeconds, 60)
-            if client.authSecret.isEmpty,
+            runtimeSeconds = max(runtimeSeconds, 60)
+            if config.authSecret.isEmpty,
                let env = ProcessInfo.processInfo.environment["ECOFLOW_AUTH_SECRET"],
                let b = hexBytes(env) {
-                client.authSecret = b
+                config.authSecret = b
             }
-            if client.authSecret.isEmpty {
+            if config.authSecret.isEmpty {
                 print("[auth] note: no auth secret set (--secret <32hex> or ECOFLOW_AUTH_SECRET)")
+            }
+            client.config = config
+            if let path = logfile {
+                _ = FileManager.default.createFile(atPath: path, contents: nil)
+                if let fh = FileHandle(forWritingAtPath: path) {
+                    dup2(fh.fileDescriptor, 1); dup2(fh.fileDescriptor, 2); setbuf(stdout, nil)
+                }
             }
         } else {
             print("usage: ecoflow-session run [--sn SN] [--id UUID] [--seconds N] [--logfile path]")
@@ -63,6 +71,11 @@ struct EcoFlowMain {
             print("          [--send-cmd <src> <dst> <func> <id> <payloadhex>]...")
             exit(0)
         }
-        client.run()
+        client.start()
+        let deadline = Date().addingTimeInterval(TimeInterval(runtimeSeconds + 60))
+        while Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.2))
+        }
+        client.stop()
     }
 }
