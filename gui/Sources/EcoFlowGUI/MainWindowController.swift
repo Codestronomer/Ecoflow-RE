@@ -10,9 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var statusBar: StatusBarController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSLog("EF-LAUNCH: didFinishLaunching entered")
         let main = MainWindowController(model: model)
-        NSLog("EF-LAUNCH: window controller created")
         main.showWindow(nil)
         main.window?.makeKeyAndOrderFront(nil)
         windowController = main
@@ -22,6 +20,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBar = status
 
         MainMenu.install(to: self)
+
+        // EF_AC_PROBE: auto-connect so the MPPT dump gets a live session
+        if ProcessInfo.processInfo.environment["EF_AC_PROBE"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                NSLog("EF-PROBE: connecting…")
+                self?.model.connect()
+            }
+        }
 
         // SELF-TEST (EF_TEST_SIGNIN=1): drive the sign-in lifecycle headlessly
         if ProcessInfo.processInfo.environment["EF_TEST_SIGNIN"] != nil {
@@ -107,9 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct EcoFlowGUIMain {
     static func main() {
-        NSLog("EF-LAUNCH: main entered")
         let app = NSApplication.shared
-        NSLog("EF-LAUNCH: app shared")
         let delegate = MainActor.assumeIsolated { AppDelegate() }
         app.delegate = delegate
         app.setActivationPolicy(.regular)
@@ -209,7 +213,6 @@ final class RootSplitViewController: NSSplitViewController {
 
     override func viewDidLayout() {
         super.viewDidLayout()
-        NSLog("EF-FIT pass: split.fitting=\(splitView.fittingSize) pref=\(preferredContentSize) winFrame=\(view.window?.frame ?? .zero)")
         preferredContentSize = NSSize(width: 980, height: 680)
         // one-shot: the first layout pass applies the content's fitting
         // width (259) over the intended 980 — correct it once it has settled

@@ -231,7 +231,7 @@ own captured traffic:
 Client usage (after auth succeeds, commands are sent automatically):
 
 ```bash
-./ecoflow-session run --sn <SN> --id <UUID> --seconds 60 --set-time
+./ecoflow-session run --sn R701ZKB59GCR0496 --id <UUID> --seconds 60 --set-time
 ./ecoflow-session run ... --send-cmd 21 03 03 40 ea070b1611231e07
 ```
 `--set-time` builds the RTC frame from the Mac's clock; `--send-cmd` is the
