@@ -76,6 +76,8 @@ final class MainWindowController: NSWindowController {
         split.addSplitViewItem(sidebarItem)
         split.addSplitViewItem(detailItem)
         window.contentViewController = split
+        window.setContentSize(NSSize(width: 980, height: 680))
+        window.center()
         refreshObserver = NotificationCenter.default.addObserver(
             forName: .appModelChanged, object: model, queue: .main
         ) { [weak self] _ in
@@ -91,7 +93,7 @@ final class MainWindowController: NSWindowController {
 // Detail tab host: segmented control switching three child views.
 @MainActor
 final class DetailHostViewController: NSViewController {
-    private let segmented = NSSegmentedControl(labels: ["Dashboard", "Log"],
+    private let segmented = NSSegmentedControl(labels: ["Dashboard", "Log", "Settings"],
                                                trackingMode: .selectOne,
                                                target: nil, action: nil)
     private var tabViews: [(view: NSView, isSettings: Bool)]
