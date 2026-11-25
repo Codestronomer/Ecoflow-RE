@@ -267,7 +267,7 @@ struct SessionHandshake {
     // load login_key table from disk
     static var loginKeyTable: [UInt8]? = {
         let paths = [
-            "ble/login-key-table.bin",
+            "/Users/macbookpro/dev/ecoflow-decomp/ble/login-key-table.bin",
             "login-key-table.bin",
         ]
         for p in paths {

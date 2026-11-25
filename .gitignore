@@ -8,6 +8,8 @@
 *.xapk
 *.obb
 
+gui/.build/
+
 # decompiler / analysis trees
 jadx-src/
 jadx-targeted/
