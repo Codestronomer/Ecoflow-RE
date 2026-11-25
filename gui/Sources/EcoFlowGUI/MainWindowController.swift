@@ -107,9 +107,8 @@ final class MainWindowController: NSWindowController {
         window.backgroundColor = .windowBackgroundColor
         window.isOpaque = true
         window.autorecalculatesKeyViewLoop = true   // keep Tab order correct as views come and go
-        // appear on the active Space (and alongside fullscreen apps) instead
-        // of spawning an invisible background Space
-        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        // appear on the active Space; support native fullscreen (green button)
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenPrimary, .fullScreenAuxiliary]
         super.init(window: window)
 
         dashboardVC = DashboardViewController(model: model)

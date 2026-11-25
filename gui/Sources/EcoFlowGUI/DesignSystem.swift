@@ -30,12 +30,14 @@ enum Fonts {
     static let caption = NSFont.systemFont(ofSize: 11)
 }
 
-// Glass card container (NSVisualEffectView).
+// Glass card container (NSVisualEffectView). Honors Reduce Transparency:
+// when the accessibility setting is on, renders a solid background instead.
 final class GlassCardView: NSView {
+    private let effect = NSVisualEffectView()
+
     init(cornerRadius: CGFloat = Design.cardRadius) {
         super.init(frame: .zero)
         wantsLayer = true
-        let effect = NSVisualEffectView()
         effect.material = .underWindowBackground
         effect.blendingMode = .behindWindow
         effect.state = .active
@@ -50,8 +52,35 @@ final class GlassCardView: NSView {
             effect.leadingAnchor.constraint(equalTo: leadingAnchor),
             effect.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
+
+        NSWorkspace.shared.addObserver(self,
+                                       forKeyPath: "accessibilityDisplayShouldReduceTransparency",
+                                       options: [.initial, .new],
+                                       context: nil)
+        applyTransparencySetting()
     }
+
     required init?(coder: NSCoder) { fatalError("not supported") }
+
+    deinit {
+        NSWorkspace.shared.removeObserver(self, forKeyPath: "accessibilityDisplayShouldReduceTransparency")
+    }
+
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?,
+                               change: [NSKeyValueChangeKey: Any]?,
+                               context: UnsafeMutableRawPointer?) {
+        if keyPath == "accessibilityDisplayShouldReduceTransparency" {
+            DispatchQueue.main.async { [weak self] in self?.applyTransparencySetting() }
+        }
+    }
+
+    private func applyTransparencySetting() {
+        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+        effect.isHidden = reduced
+        layer?.backgroundColor = reduced ? NSColor.windowBackgroundColor.cgColor : nil
+        layer?.cornerRadius = effect.layer?.cornerRadius ?? 0
+        layer?.masksToBounds = true
+    }
 }
 
 // Metric tile: caption + big monospaced value inside a glass card.

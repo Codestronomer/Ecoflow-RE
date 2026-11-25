@@ -36,6 +36,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/EcoFlowGUI"
 cp Info.plist "$APP/Contents/Info.plist"
+cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns" 2>/dev/null || echo "(no icon)"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 echo "== codesign (ad-hoc) =="

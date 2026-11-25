@@ -21,6 +21,8 @@ final class DeviceListViewController: NSViewController {
 
     override func loadView() {
         view = NSView()
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
 
         connectButton.bezelStyle = .rounded
         connectButton.target = self
@@ -201,6 +203,13 @@ final class DeviceRowView: NSView {
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
+
+        // right-click: Connect (context menu subset per HIG)
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Connect", action: #selector(connectTapped), keyEquivalent: "")
+        menu.autoenablesItems = false
+        for item in menu.items { item.target = self; item.isEnabled = true }
+        self.menu = menu
     }
 
     required init?(coder: NSCoder) { fatalError("not supported") }

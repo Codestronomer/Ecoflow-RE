@@ -41,6 +41,14 @@ final class LogViewController: NSViewController {
         textView.autoresizingMask = [.width]
         textView.drawsBackground = false
 
+        // right-click context menu (HIG: interactive elements get one)
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Copy",
+                     action: #selector(NSText.copy(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Copy All Lines",
+                     action: #selector(LogViewController.copyAll(_:)), keyEquivalent: "")
+        textView.menu = menu
+
         let scroll = NSScrollView()
         scroll.documentView = textView
         scroll.hasVerticalScroller = true
@@ -79,6 +87,11 @@ final class LogViewController: NSViewController {
     @objc private func pauseTapped() {
         model.logPaused.toggle()
         pauseButton.title = model.logPaused ? "Resume" : "Pause"
+    }
+
+    @objc func copyAll(_ sender: Any?) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(currentLines().joined(separator: "\n"), forType: .string)
     }
 
     @objc private func copyTapped() {
