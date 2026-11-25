@@ -10,6 +10,8 @@ struct EcoFlowMain {
         var config = EcoFlowSession.Config()
         var runtimeSeconds = 300
         var logfile: String?
+        var loginCreds: (identifier: String, password: String)?
+        var loginRegion: EcoFlowRegion = .global
 
         let transport = RealBleTransport()
         let client = EcoFlowSession(transport: transport, config: config, log: { print($0) })
@@ -45,6 +47,25 @@ struct EcoFlowMain {
                     i += 5
                 case "--logfile": i += 1
                     logfile = args[i]
+                case "--login":
+                    // --login <email-or-phone> <password>: resolve the auth
+                    // secret via EcoFlow's cloud login — no userId hunting.
+                    guard i + 2 < args.count else {
+                        print("--login needs <email-or-phone> <password>"); exit(1)
+                    }
+                    loginCreds = (args[i+1], args[i+2])
+                    i += 2
+                case "--region":
+                    guard i + 1 < args.count else { print("--region needs a name"); exit(1) }
+                    i += 1
+                    let names = args[i].lowercased()
+                    guard let r = EcoFlowRegion.allCases.first(where: {
+                        String(describing: $0).lowercased() == names
+                    }) else {
+                        print("--region: unknown region (use global/europe/us/asia/japan/russia/china)")
+                        exit(1)
+                    }
+                    loginRegion = r
                 default: break
                 }
                 i += 1
@@ -55,8 +76,32 @@ struct EcoFlowMain {
                let b = hexBytes(env) {
                 config.authSecret = b
             }
+            if let (identifier, password) = loginCreds {
+                guard !(config.sn ?? "").isEmpty else {
+                    print("--login requires --sn <serial number> to derive the secret"); exit(1)
+                }
+                let auth = EcoFlowCloudAuth(region: loginRegion)
+                print("[auth] signing in to EcoFlow (\(loginRegion.host))…")
+                let sem = DispatchSemaphore(value: 0)
+                var result: Result<String, Error>?
+                Task {
+                    do { result = .success(try await auth.fetchUserId(identifier: identifier, password: password)) }
+                    catch { result = .failure(error) }
+                    sem.signal()
+                }
+                sem.wait()
+                switch result! {
+                case .success(let userId):
+                    let secret = EcoFlowCloudAuth.bleSecret(userId: userId, deviceSN: config.sn!)
+                    config.authSecret = Array(secret.utf8)
+                    print("[auth] resolved userId, derived secret from SN (stored in memory only)")
+                case .failure(let error):
+                    print("[auth] login failed: \(error)")
+                    exit(1)
+                }
+            }
             if config.authSecret.isEmpty {
-                print("[auth] note: no auth secret set (--secret <32hex> or ECOFLOW_AUTH_SECRET)")
+                print("[auth] note: no auth secret set (--secret <32hex>, --login, or ECOFLOW_AUTH_SECRET)")
             }
             client.config = config
             if let path = logfile {
@@ -67,7 +112,8 @@ struct EcoFlowMain {
             }
         } else {
             print("usage: ecoflow-session run [--sn SN] [--id UUID] [--seconds N] [--logfile path]")
-            print("          [--secret <32hex>] [--set-time] [--ac on|off]")
+            print("          [--secret <32hex> | --login <email-or-phone> <password> [--region global|europe|us|asia|japan|russia|china]]")
+            print("          [--sn SN] [--set-time] [--ac on|off]")
             print("          [--send-cmd <src> <dst> <func> <id> <payloadhex>]...")
             exit(0)
         }

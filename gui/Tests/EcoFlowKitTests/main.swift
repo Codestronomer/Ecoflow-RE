@@ -343,6 +343,58 @@ func testEventStream() {
     check(events.contains { if case .frame = $0 { return true } else { return false } }, "event: frames emitted")
 }
 
+// MARK: cloud auth (pure parts — no network)
+
+func testCloudAuth() {
+    print("cloud auth")
+    let auth = EcoFlowCloudAuth(region: .global)
+
+    // email login request: shape + base64 password
+    let req = try! auth.loginRequest(identifier: "user@example.com", password: "s3cret")
+    check(req.url?.absoluteString == "https://api.ecoflow.com/auth/login", "login: global host URL")
+    expectEqual(req.httpMethod, "POST", "login: POST method")
+    let body = String(data: req.httpBody!, encoding: .utf8)!
+    check(body.contains("\"scene\":\"IOT_APP\""), "login: scene IOT_APP")
+    check(body.contains("\"userType\":\"ECOFLOW\""), "login: userType ECOFLOW")
+    check(body.contains("\"password\":\"\(Data("s3cret".utf8).base64EncodedString())\""),
+          "login: password is base64")
+    check(body.contains("\"email\":\"user@example.com\""), "login: email field")
+    check(body.contains("\"phone\"") == false, "login: no phone field for email")
+
+    // phone identifiers route to the CN host
+    let phoneReq = try! auth.loginRequest(identifier: "+8613800138000", password: "pw")
+    check(phoneReq.url?.host == "api-cn.ecoflow.com", "login: phone routes to CN host")
+    check(String(data: phoneReq.httpBody!, encoding: .utf8)!.contains("\"phone\":\"13800138000\""),
+          "login: phone field, +86 stripped")
+
+    // userId extraction: success shape used by the official app
+    let ok = #"{"code":"0","message":"Success","data":{"token":"tok","user":{"userId":"1234567890123456789"}}}"#
+    let uid = try! EcoFlowCloudAuth.userId(fromResponse: Data(ok.utf8))
+    expectEqual(uid, "1234567890123456789", "parse: userId extracted")
+
+    // API-level failure surfaces code+message
+    let fail = #"{"code":"401","message":"密码错误"}"#
+    var threw: Error?
+    do { _ = try EcoFlowCloudAuth.userId(fromResponse: Data(fail.utf8)) }
+    catch { threw = error }
+    expectEqual(threw as? EcoFlowCloudError,
+                EcoFlowCloudError.apiError(code: "401", message: "密码错误"),
+                "parse: api error surfaced")
+
+    // garbage → invalidResponse
+    threw = nil
+    do { _ = try EcoFlowCloudAuth.userId(fromResponse: Data("not json".utf8)) }
+    catch { threw = error }
+    expectEqual(threw as? EcoFlowCloudError, EcoFlowCloudError.invalidResponse,
+                "parse: garbage rejected")
+
+    // secret derivation: MD5hex(userId + SN), uppercase — matches the
+    // device-verified auth packet bytes
+    expectEqual(EcoFlowCloudAuth.bleSecret(userId: "u", deviceSN: "s"),
+                md5(Data("us".utf8)).map { String(format: "%02X", $0) }.joined(),
+                "secret: MD5hex(userId+SN) uppercase")
+}
+
 // MARK: run all
 
 testGoldenFrames()
@@ -356,6 +408,7 @@ testHeartbeat()
 testBusyTimeout()
 testReconnectBackoff()
 testEventStream()
+testCloudAuth()
 
 print()
 if failures.isEmpty {
