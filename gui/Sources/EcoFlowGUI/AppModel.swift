@@ -29,6 +29,11 @@ final class AppModel {
     private(set) var dc12vWatts: Int?
     private(set) var carOutWatts: Int?
     private(set) var dc24vState: Int?
+    // per-module inputs (BMS battery-side, INV AC-side, MPPT solar-side);
+    // displayed input = the strongest active source
+    private var bmsInputWatts: Int?
+    private var invInputWatts: Int?
+    private var mpptInputWatts: Int?
     private(set) var packs: [String?] = []
     private(set) var lastFrameDate: Date?
 
@@ -93,6 +98,7 @@ final class AppModel {
         batteryTemp = nil; mosTemp = nil; cycles = nil
         acEnabled = nil; mpptInVoltage = nil; chargeState = nil
         dc12vWatts = nil; carOutWatts = nil; dc24vState = nil
+        bmsInputWatts = nil; invInputWatts = nil; mpptInputWatts = nil
         packs = []; lastFrameDate = nil; stale = false
 
         var config = EcoFlowSession.Config()
@@ -250,10 +256,10 @@ final class AppModel {
             }
             batteryTemp = Int(p[20])
             if !isPlaceholder(34) { cycles = Int(u32(34)) }   // fixes 67372198
-            if !isPlaceholder(57) { inputWatts = Int(u32(57)) }
+            if !isPlaceholder(57) { bmsInputWatts = Int(u32(57)) }
             if !isPlaceholder(61) { outputWatts = Int(u32(61)) }
         case (0x04, 0x20, 0x02) where p.count >= 45:          // INV heartbeat 70B
-            inputWatts = Int(u16(9))
+            if u16(9) != 0x0404 { invInputWatts = Int(u16(9)) }   // AC-input watts
             outputWatts = Int(u16(11))
             mosTemp = Int(p[32])
         case (0x05, 0x20, 0x02) where p.count >= 73:          // MPPT heartbeat 121B
@@ -262,6 +268,7 @@ final class AppModel {
             chargeState = Int(p[33])
             acProbeDump(p)
             // verified MPPT map offsets (DirectMpptHeartbeatPack)
+            if !isPlaceholder(16) { mpptInputWatts = Int(u16(16)) }   // in_watts (solar)
             if !isPlaceholder(42) { dc12vWatts = Int(u16(42)) }       // dcdc12v_watts
             if !isPlaceholder(52) { carOutWatts = Int(u16(52)) }      // car_out_watts
             dc24vState = Int(p[59])                                    // dc24v_state
@@ -317,6 +324,11 @@ final class AppModel {
             NSLog("EF-PROBE: setAC(true)")
             self?.setAC(true)
         }
+    }
+
+    private func updateInputWatts() {
+        let active = [bmsInputWatts, invInputWatts, mpptInputWatts].compactMap { $0 }
+        inputWatts = active.max()
     }
 
     // MARK: staleness watchdog
